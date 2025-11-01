@@ -14,7 +14,7 @@
 
 runtime: python312
 env_variables:
-  API_KEY: "api-key"
+  API_KEY: "REMOVED_API_KEY"
   SECRET_KEY: "REMOVED_SECRET_KEY"
 
 handlers:
