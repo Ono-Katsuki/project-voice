@@ -11,6 +11,14 @@ static/locales/
 *storybook.log
 /storybook-static
 
+# Secrets and config
+app.yaml
+.env
+.env.*
+*.key
+*_secret*
+credentials.json
+
 # iOS
 ios/DerivedData/
 ios/build/
