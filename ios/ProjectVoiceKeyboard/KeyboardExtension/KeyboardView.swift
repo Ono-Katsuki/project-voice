@@ -25,6 +25,10 @@ class KeyboardView: UIView {
     private let suggestionBar = SuggestionBar()
     private let keyboardStackView = UIStackView()
 
+    // Delete long press support
+    private var deleteTimer: Timer?
+    private var isDeleteLongPressing = false
+
     // English alphabet keyboard (QWERTY - iOS standard)
     private let alphabetKeys = [
         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
@@ -280,7 +284,41 @@ class KeyboardView: UIView {
 
         button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
 
+        // Add long press support for delete key
+        if key == "delete" || key == "⌫" {
+            button.addTarget(self, action: #selector(deleteTouchDown(_:)), for: .touchDown)
+            button.addTarget(self, action: #selector(deleteTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        }
+
         return button
+    }
+
+    @objc private func deleteTouchDown(_ sender: UIButton) {
+        // Start delete timer for long press
+        isDeleteLongPressing = false
+        deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            self?.isDeleteLongPressing = true
+            self?.startContinuousDelete()
+        }
+    }
+
+    @objc private func deleteTouchUp(_ sender: UIButton) {
+        // Stop delete timer
+        deleteTimer?.invalidate()
+        deleteTimer = nil
+        isDeleteLongPressing = false
+    }
+
+    private func startContinuousDelete() {
+        guard isDeleteLongPressing else { return }
+
+        // Delete one character
+        delegate?.keyboardView(self, didTapKey: "delete")
+
+        // Schedule next delete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.startContinuousDelete()
+        }
     }
 
     private func createEmotionSelectorButton() -> UIButton {
