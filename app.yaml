@@ -14,8 +14,8 @@
 
 runtime: python312
 env_variables:
-  API_KEY: "AIzaSyCP-6pGSlattZyrMtQXhBZUs7vUOC_mldA"
-  SECRET_KEY: "project-voice-secret"
+  API_KEY: "YOUR_GEMINI_API_KEY_HERE"
+  SECRET_KEY: "YOUR_SECRET_KEY_HERE"
 
 handlers:
 - url: /static
