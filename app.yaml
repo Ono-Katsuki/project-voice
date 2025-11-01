@@ -14,8 +14,8 @@
 
 runtime: python312
 env_variables:
-  API_KEY: "REMOVED_API_KEY"
-  SECRET_KEY: "REMOVED_SECRET_KEY"
+  API_KEY: "AIzaSyCP-6pGSlattZyrMtQXhBZUs7vUOC_mldA"
+  SECRET_KEY: "project-voice-secret"
 
 handlers:
 - url: /static
