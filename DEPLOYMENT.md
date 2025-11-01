@@ -64,7 +64,7 @@ Current configuration:
 runtime: python312
 env_variables:
   API_KEY: "api-key"              # ← CHANGE THIS
-  SECRET_KEY: "project-voice-secret"  # ← CHANGE THIS
+  SECRET_KEY: "REMOVED_SECRET_KEY"  # ← CHANGE THIS
 
 handlers:
 - url: /static

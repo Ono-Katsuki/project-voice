@@ -1,2 +1,0 @@
-AIzaSyCP-6pGSlattZyrMtQXhBZUs7vUOC_mldA==>REMOVED_API_KEY
-project-voice-secret==>REMOVED_SECRET_KEY
