@@ -61,7 +61,19 @@ class EmotionSelector: UIView {
     }
 
     private func setupUI() {
-        backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
+        // Adaptive background for light/dark mode
+        if #available(iOS 13.0, *) {
+            backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.15, green: 0.15, blue: 0.16, alpha: 1.0) // Dark mode
+                default:
+                    return UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0) // Light mode
+                }
+            }
+        } else {
+            backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
+        }
 
         stackView.axis = .horizontal
         stackView.spacing = 8
@@ -106,7 +118,19 @@ class EmotionSelector: UIView {
         textLabel.text = emotion.label(for: UserSettings.shared.currentLanguage)
         textLabel.font = UIFont.systemFont(ofSize: 11, weight: .medium)
         textLabel.textAlignment = .center
-        textLabel.textColor = UIColor(red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0)
+        // Adaptive text color for light/dark mode
+        if #available(iOS 13.0, *) {
+            textLabel.textColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return .white // Dark mode
+                default:
+                    return UIColor(red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0) // Light mode
+                }
+            }
+        } else {
+            textLabel.textColor = UIColor(red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0)
+        }
         textLabel.tag = 102 // Tag for text label
         textLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -128,7 +152,19 @@ class EmotionSelector: UIView {
             textLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
         ])
 
-        button.backgroundColor = .white
+        // Adaptive button background for light/dark mode
+        if #available(iOS 13.0, *) {
+            button.backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0) // Dark mode
+                default:
+                    return .white // Light mode
+                }
+            }
+        } else {
+            button.backgroundColor = .white
+        }
         button.layer.cornerRadius = 8
         button.layer.borderWidth = 2
         button.layer.borderColor = UIColor.clear.cgColor

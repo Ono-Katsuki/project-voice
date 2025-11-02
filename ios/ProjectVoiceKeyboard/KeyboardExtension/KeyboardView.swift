@@ -80,8 +80,19 @@ class KeyboardView: UIView {
     }
 
     private func setupUI() {
-        // iOS standard keyboard background (light mode)
-        backgroundColor = UIColor(red: 0.82, green: 0.835, blue: 0.863, alpha: 1.0)
+        // Adaptive keyboard background (light/dark mode)
+        if #available(iOS 13.0, *) {
+            backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1.0) // Dark mode
+                default:
+                    return UIColor(red: 0.82, green: 0.835, blue: 0.863, alpha: 1.0) // Light mode
+                }
+            }
+        } else {
+            backgroundColor = UIColor(red: 0.82, green: 0.835, blue: 0.863, alpha: 1.0)
+        }
 
         // Setup emotion selector
         emotionSelector.delegate = self
@@ -145,12 +156,12 @@ class KeyboardView: UIView {
             // Left side: fixed button (mode switch or keyboard switch)
             if index < leftColumnKeys.count {
                 let leftButton = createKeyButton(for: leftColumnKeys[index])
-                leftButton.widthAnchor.constraint(equalToConstant: 60).isActive = true
+                leftButton.widthAnchor.constraint(equalToConstant: 80).isActive = true
                 rowStack.addArrangedSubview(leftButton)
             } else {
                 // For rows beyond the fixed buttons, add empty spacer
                 let spacer = UIView()
-                spacer.widthAnchor.constraint(equalToConstant: 60).isActive = true
+                spacer.widthAnchor.constraint(equalToConstant: 80).isActive = true
                 rowStack.addArrangedSubview(spacer)
             }
 
@@ -177,17 +188,17 @@ class KeyboardView: UIView {
             // Right side: fixed button (delete, space, return, or emotion selector)
             if index < rightColumnKeys.count {
                 let rightButton = createKeyButton(for: rightColumnKeys[index])
-                rightButton.widthAnchor.constraint(equalToConstant: 70).isActive = true
+                rightButton.widthAnchor.constraint(equalToConstant: 90).isActive = true
                 rowStack.addArrangedSubview(rightButton)
             } else if index == keys.count - 1 {
                 // Last row: add emotion selector button
                 let emotionButton = createEmotionSelectorButton()
-                emotionButton.widthAnchor.constraint(equalToConstant: 70).isActive = true
+                emotionButton.widthAnchor.constraint(equalToConstant: 90).isActive = true
                 rowStack.addArrangedSubview(emotionButton)
             } else {
                 // For other rows, add empty spacer
                 let spacer = UIView()
-                spacer.widthAnchor.constraint(equalToConstant: 70).isActive = true
+                spacer.widthAnchor.constraint(equalToConstant: 90).isActive = true
                 rowStack.addArrangedSubview(spacer)
             }
 
@@ -253,9 +264,28 @@ class KeyboardView: UIView {
         // Store the original key value in accessibilityIdentifier
         button.accessibilityIdentifier = key
 
-        // iOS standard key styling
-        button.backgroundColor = .white
-        button.setTitleColor(.black, for: .normal)
+        // iOS standard key styling (adaptive for light/dark mode)
+        if #available(iOS 13.0, *) {
+            button.backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.35, green: 0.35, blue: 0.37, alpha: 1.0) // Dark mode key
+                default:
+                    return .white // Light mode key
+                }
+            }
+            button.setTitleColor(UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return .white // Dark mode text
+                default:
+                    return .black // Light mode text
+                }
+            }, for: .normal)
+        } else {
+            button.backgroundColor = .white
+            button.setTitleColor(.black, for: .normal)
+        }
         button.titleLabel?.font = UIFont.systemFont(ofSize: 22, weight: .regular)
         button.layer.cornerRadius = 5
 
@@ -267,8 +297,18 @@ class KeyboardView: UIView {
 
         // Special styling for special keys (iOS standard gray keys)
         if ["shift", "delete", "⌫", "123", "☆123", "ABC", "#", "#+=", "🌐", "小", "゛゜小", "あいう", "空白", "改行"].contains(key) {
-            button.backgroundColor = UIColor(red: 0.67, green: 0.69, blue: 0.73, alpha: 1.0)
-            button.setTitleColor(.black, for: .normal)
+            if #available(iOS 13.0, *) {
+                button.backgroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0) // Dark mode special key
+                    default:
+                        return UIColor(red: 0.67, green: 0.69, blue: 0.73, alpha: 1.0) // Light mode special key
+                    }
+                }
+            } else {
+                button.backgroundColor = UIColor(red: 0.67, green: 0.69, blue: 0.73, alpha: 1.0)
+            }
 
             // Special symbols for shift and delete
             if key == "shift" {
@@ -553,7 +593,19 @@ class SuggestionBar: UIView {
     }
 
     private func setupUI() {
-        backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
+        // Adaptive suggestion bar background (light/dark mode)
+        if #available(iOS 13.0, *) {
+            backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.15, green: 0.15, blue: 0.16, alpha: 1.0) // Dark mode
+                default:
+                    return UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0) // Light mode
+                }
+            }
+        } else {
+            backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
+        }
 
         // Main vertical stack to hold 3 rows
         let mainStack = UIStackView()
@@ -590,10 +642,15 @@ class SuggestionBar: UIView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackView)
 
+        // Calculate 1/5 of screen width for left/right margins
+        // Approximate screen width for constraint (will be adjusted at runtime)
+        let screenWidth = UIScreen.main.bounds.width
+        let marginWidth = screenWidth / 5.0
+
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 8),
-            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -8),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: marginWidth),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -marginWidth),
             stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
         ])
@@ -682,10 +739,29 @@ class SuggestionBar: UIView {
         let button = UIButton(type: .system)
 
         if rounded {
-            // Rounded button style for words
+            // Rounded button style for words (adaptive for light/dark mode)
             var config = UIButton.Configuration.filled()
-            config.baseBackgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
-            config.baseForegroundColor = .black
+            if #available(iOS 13.0, *) {
+                config.baseBackgroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return UIColor(red: 0.3, green: 0.3, blue: 0.32, alpha: 1.0) // Dark mode
+                    default:
+                        return UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0) // Light mode
+                    }
+                }
+                config.baseForegroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return .white // Dark mode text
+                    default:
+                        return .black // Light mode text
+                    }
+                }
+            } else {
+                config.baseBackgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
+                config.baseForegroundColor = .black
+            }
             config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
             config.cornerStyle = .capsule
             config.attributedTitle = AttributedString(
@@ -694,10 +770,21 @@ class SuggestionBar: UIView {
             )
             button.configuration = config
         } else {
-            // Plain button style for sentence words
+            // Plain button style for sentence words (adaptive for light/dark mode)
             var config = UIButton.Configuration.plain()
             config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
-            config.baseForegroundColor = .black
+            if #available(iOS 13.0, *) {
+                config.baseForegroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return .white // Dark mode text
+                    default:
+                        return .black // Light mode text
+                    }
+                }
+            } else {
+                config.baseForegroundColor = .black
+            }
             config.attributedTitle = AttributedString(
                 word,
                 attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 16)])
