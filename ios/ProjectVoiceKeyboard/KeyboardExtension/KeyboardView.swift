@@ -140,8 +140,8 @@ class KeyboardView: UIView {
 
         let keys = getCurrentKeys()
 
-        // Fixed left column buttons: mode switches, keyboard switch, and model switch
-        let leftColumnKeys = ["☆123", "ABC", "あいう", "🌐", getModelButtonLabel()]
+        // Fixed left column buttons: mode switches, model switch, and keyboard switch (bottom)
+        let leftColumnKeys = ["☆123", "ABC", "あいう", getModelButtonLabel(), "🌐"]
 
         // Fixed right column buttons: delete, space, return
         let rightColumnKeys = ["delete", "空白", "改行"]
