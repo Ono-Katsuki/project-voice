@@ -562,7 +562,7 @@ class KeyboardView: UIView {
     }
 
     func showInitialPhrases(_ phrases: [String]) {
-        suggestionBar.updateSuggestions(sentences: phrases, words: [], currentText: "")
+        suggestionBar.showInitialPhrases(phrases)
     }
 
     func getCurrentEmotion() -> SentenceEmotion {
@@ -716,6 +716,71 @@ class SuggestionBar: UIView {
                 stacks[startRow + index].addArrangedSubview(button)
             }
         }
+    }
+
+    func showInitialPhrases(_ phrases: [String]) {
+        // Clear existing suggestions
+        sentenceStack1.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        sentenceStack2.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        sentenceStack3.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        self.currentText = ""
+
+        // Distribute phrases across 3 rows horizontally
+        let stacks = [sentenceStack1, sentenceStack2, sentenceStack3]
+        let phrasesPerRow = (phrases.count + 2) / 3  // Ceiling division
+
+        for (index, phrase) in phrases.enumerated() {
+            let rowIndex = index / phrasesPerRow
+            if rowIndex < 3 {
+                let button = createInitialPhraseButton(phrase)
+                stacks[rowIndex].addArrangedSubview(button)
+            }
+        }
+    }
+
+    private func createInitialPhraseButton(_ phrase: String) -> UIButton {
+        let button = UIButton(type: .system)
+
+        var config = UIButton.Configuration.filled()
+        if #available(iOS 13.0, *) {
+            config.baseBackgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0)
+                default:
+                    return UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
+                }
+            }
+            config.baseForegroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return .white
+                default:
+                    return .black
+                }
+            }
+        } else {
+            config.baseBackgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
+            config.baseForegroundColor = .black
+        }
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+        config.cornerStyle = .capsule
+        config.attributedTitle = AttributedString(
+            phrase,
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+        )
+        button.configuration = config
+
+        button.accessibilityLabel = phrase
+        button.addTarget(self, action: #selector(initialPhraseTapped(_:)), for: .touchUpInside)
+
+        return button
+    }
+
+    @objc private func initialPhraseTapped(_ sender: UIButton) {
+        guard let phrase = sender.accessibilityLabel else { return }
+        delegate?.suggestionBar(self, didSelectSuggestion: phrase)
     }
 
     private func createSuggestionContainer(for suggestion: String, isWord: Bool) -> UIView {
