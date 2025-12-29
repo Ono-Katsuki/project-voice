@@ -48,7 +48,7 @@ class KeyboardViewController: UIInputViewController {
             keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             keyboardView.topAnchor.constraint(equalTo: view.topAnchor),
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            keyboardView.heightAnchor.constraint(equalToConstant: 350) // Increased for emotion selector
+            keyboardView.heightAnchor.constraint(equalToConstant: 420) // Increased height for easier key pressing
         ])
     }
 
