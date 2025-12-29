@@ -48,7 +48,7 @@ class KeyboardViewController: UIInputViewController {
             keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             keyboardView.topAnchor.constraint(equalTo: view.topAnchor),
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            keyboardView.heightAnchor.constraint(equalToConstant: 480) // Larger height for iPad
+            keyboardView.heightAnchor.constraint(equalToConstant: 520) // Larger height for iPad
         ])
     }
 

@@ -123,7 +123,7 @@ class KeyboardView: UIView {
             suggestionBar.topAnchor.constraint(equalTo: topAnchor, constant: 4), // Start from top
             suggestionBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             suggestionBar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            suggestionBar.heightAnchor.constraint(equalToConstant: 90), // 3 rows: 30px each
+            suggestionBar.heightAnchor.constraint(equalToConstant: 110), // 3 rows with larger text
 
             keyboardStackView.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor, constant: 8),
             keyboardStackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
@@ -768,7 +768,7 @@ class SuggestionBar: UIView {
         config.cornerStyle = .capsule
         config.attributedTitle = AttributedString(
             phrase,
-            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .medium)])
         )
         button.configuration = config
 
@@ -839,7 +839,7 @@ class SuggestionBar: UIView {
         config.cornerStyle = .medium
         config.attributedTitle = AttributedString(
             displayText,
-            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .medium)])
         )
         button.configuration = config
 
@@ -885,7 +885,7 @@ class SuggestionBar: UIView {
             config.cornerStyle = .capsule
             config.attributedTitle = AttributedString(
                 displayText,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .medium)])
             )
             button.configuration = config
         } else {
@@ -1044,7 +1044,7 @@ class SuggestionBar: UIView {
         config.cornerStyle = .medium
         config.attributedTitle = AttributedString(
             displayText,
-            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .medium)])
         )
         button.configuration = config
 
@@ -1100,7 +1100,7 @@ class SuggestionBar: UIView {
             config.cornerStyle = .capsule
             config.attributedTitle = AttributedString(
                 word,
-                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 17, weight: .medium)])
             )
             button.configuration = config
         } else {
