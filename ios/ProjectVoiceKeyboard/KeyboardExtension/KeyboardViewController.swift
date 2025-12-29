@@ -225,8 +225,8 @@ extension KeyboardViewController: KeyboardViewDelegate {
         // Get current text before modification
         let currentText = proxy.documentContextBeforeInput ?? ""
 
-        // Check if using v11 tuned model
-        let isV11 = settings.aiConfig == "voice_v11"
+        // Check if using v11 tuned model (including simple mode)
+        let isV11 = settings.aiConfig == "voice_v11" || settings.aiConfig == "voice_v11_simple"
 
         if isV11 {
             // For v11: delete the prefix (trailing hiragana/alphabet) that was used for prediction
