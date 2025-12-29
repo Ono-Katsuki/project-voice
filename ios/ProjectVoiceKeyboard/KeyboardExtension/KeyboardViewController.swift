@@ -220,23 +220,37 @@ extension KeyboardViewController: KeyboardViewDelegate {
 
     func keyboardView(_ view: KeyboardView, didSelectSuggestion suggestion: String) {
         let proxy = textDocumentProxy
+        let settings = UserSettings.shared
 
         // Get current text before modification
         let currentText = proxy.documentContextBeforeInput ?? ""
 
-        // Delete the current word being typed
-        if let currentWord = getCurrentWord() {
-            for _ in 0..<currentWord.count {
+        // Check if using v11 tuned model
+        let isV11 = settings.aiConfig == "voice_v11"
+
+        if isV11 {
+            // For v11: delete the prefix (trailing hiragana/alphabet) that was used for prediction
+            let (_, textForLLM) = TextProcessor.splitLastFewSentencesForLLM(currentText)
+            let (_, v11Prefix) = TextProcessor.splitForV11(textForLLM)
+
+            // Delete the prefix characters
+            for _ in 0..<v11Prefix.count {
                 proxy.deleteBackward()
+            }
+        } else {
+            // For standard models: delete the current word being typed
+            if let currentWord = getCurrentWord() {
+                for _ in 0..<currentWord.count {
+                    proxy.deleteBackward()
+                }
             }
         }
 
         // Normalize suggestion and insert
         let normalizedSuggestion = TextProcessor.normalize(suggestion, isLastInputFromSuggestion: true)
-        proxy.insertText(normalizedSuggestion + " ")
+        proxy.insertText(normalizedSuggestion)
 
         // Update message history with prefix tracking
-        let settings = UserSettings.shared
         let prefix = TextProcessor.getUserInputPrefix(normalizedSuggestion)
         settings.addToMessageHistory(text: normalizedSuggestion, prefix: prefix)
 

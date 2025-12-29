@@ -571,17 +571,21 @@ class SuggestionBar: UIView {
 
     weak var delegate: SuggestionBarDelegate?
 
-    // 3 rows: sentence1, sentence2, words
+    // 3 rows for sentences
     private let sentenceRow1 = UIScrollView()
     private let sentenceRow2 = UIScrollView()
-    private let wordRow = UIScrollView()
+    private let sentenceRow3 = UIScrollView()
 
     private let sentenceStack1 = UIStackView()
     private let sentenceStack2 = UIStackView()
-    private let wordStack = UIStackView()
+    private let sentenceStack3 = UIStackView()
 
     private var currentText: String = ""
     private var currentLanguage: Language?
+
+    // Block selection overlay
+    private var blockSelectionOverlay: UIView?
+    private var currentBlockSuggestion: String?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -615,14 +619,14 @@ class SuggestionBar: UIView {
         mainStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(mainStack)
 
-        // Setup each row
+        // Setup each row (3 rows)
         setupRow(scrollView: sentenceRow1, stackView: sentenceStack1)
         setupRow(scrollView: sentenceRow2, stackView: sentenceStack2)
-        setupRow(scrollView: wordRow, stackView: wordStack)
+        setupRow(scrollView: sentenceRow3, stackView: sentenceStack3)
 
         mainStack.addArrangedSubview(sentenceRow1)
         mainStack.addArrangedSubview(sentenceRow2)
-        mainStack.addArrangedSubview(wordRow)
+        mainStack.addArrangedSubview(sentenceRow3)
 
         NSLayoutConstraint.activate([
             mainStack.topAnchor.constraint(equalTo: topAnchor),
@@ -660,27 +664,25 @@ class SuggestionBar: UIView {
         // Clear existing suggestions
         sentenceStack1.arrangedSubviews.forEach { $0.removeFromSuperview() }
         sentenceStack2.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        wordStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        sentenceStack3.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         self.currentText = currentText
         self.currentLanguage = LanguageManager.shared.getLanguage(code: UserSettings.shared.currentLanguage)
 
-        // Add sentences to first 2 rows
-        for (index, sentence) in sentences.enumerated() {
+        // Add sentences to 3 rows
+        let stacks = [sentenceStack1, sentenceStack2, sentenceStack3]
+        for (index, sentence) in sentences.prefix(3).enumerated() {
             let container = createSuggestionContainer(for: sentence, isWord: false)
-            if index == 0 {
-                sentenceStack1.addArrangedSubview(container)
-            } else if index == 1 {
-                sentenceStack2.addArrangedSubview(container)
-            }
-            // Only show first 2 sentences
-            if index >= 1 { break }
+            stacks[index].addArrangedSubview(container)
         }
 
-        // Add words to third row (rounded buttons)
-        for word in words.prefix(5) {
-            let button = createWordButton(word, fullSuggestion: word, rounded: true)
-            wordStack.addArrangedSubview(button)
+        // If we have words and less than 3 sentences, use remaining rows for words
+        if sentences.count < 3 && !words.isEmpty {
+            let startRow = sentences.count
+            for (index, word) in words.prefix(3 - startRow).enumerated() {
+                let button = createWordButton(word, fullSuggestion: word, rounded: true)
+                stacks[startRow + index].addArrangedSubview(button)
+            }
         }
     }
 
@@ -690,49 +692,284 @@ class SuggestionBar: UIView {
         container.spacing = 2
         container.distribution = .fill
 
-        // Display as a single button without word-by-word splitting
-        let button = createWordButton(suggestion, fullSuggestion: suggestion, wordIndex: -1, rounded: isWord)
-        container.addArrangedSubview(button)
+        // Check if this is a v11 format suggestion (contains /)
+        let isV11Format = suggestion.contains("/")
 
-        return container
-
-        /* Commented out: word-by-word splitting disabled
-        guard let language = currentLanguage else {
-            // Fallback to simple button
-            let button = createWordButton(suggestion, fullSuggestion: suggestion, rounded: isWord)
+        if isV11Format {
+            // v11 format: display blocks inline
+            let blocks = suggestion.split(separator: "/").map { String($0) }
+            var cumulative = ""
+            for block in blocks {
+                cumulative += block
+                let button = createInlineBlockButton(displayText: block, cumulativeText: cumulative)
+                container.addArrangedSubview(button)
+            }
+        } else {
+            // Standard format: display as-is
+            let button = createWordButton(suggestion, fullSuggestion: suggestion, wordIndex: -1, rounded: isWord)
             container.addArrangedSubview(button)
-            return container
         }
 
-        // Check for shared prefix with current text
-        let leadingWordsCount = PunctuationProcessor.getLeadingWords(
-            suggestion,
-            matching: currentText,
-            language: language
+        return container
+    }
+
+    private func createInlineBlockButton(displayText: String, cumulativeText: String) -> UIButton {
+        let button = UIButton(type: .system)
+
+        var config = UIButton.Configuration.filled()
+        if #available(iOS 13.0, *) {
+            config.baseBackgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.3, green: 0.3, blue: 0.32, alpha: 1.0)
+                default:
+                    return UIColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1.0)
+                }
+            }
+            config.baseForegroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return .white
+                default:
+                    return .black
+                }
+            }
+        } else {
+            config.baseBackgroundColor = UIColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1.0)
+            config.baseForegroundColor = .black
+        }
+        config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+        config.cornerStyle = .medium
+        config.attributedTitle = AttributedString(
+            displayText,
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
         )
+        button.configuration = config
 
-        // Split into words with punctuation separation
-        let words = PunctuationProcessor.splitPunctuations(suggestion)
+        // Store cumulative text for selection
+        button.accessibilityLabel = cumulativeText
+        button.addTarget(self, action: #selector(inlineBlockTapped(_:)), for: .touchUpInside)
 
-        // Add ellipsis if there's a shared prefix
-        if leadingWordsCount > 0 && !currentText.isEmpty {
-            let ellipsisLabel = UILabel()
-            ellipsisLabel.text = "… "
-            ellipsisLabel.font = UIFont.systemFont(ofSize: 16)
-            ellipsisLabel.textColor = .gray
-            container.addArrangedSubview(ellipsisLabel)
+        return button
+    }
+
+    @objc private func inlineBlockTapped(_ sender: UIButton) {
+        guard let cumulativeText = sender.accessibilityLabel else { return }
+        delegate?.suggestionBar(self, didSelectSuggestion: cumulativeText)
+    }
+
+    private func createBlockSelectionButton(displayText: String, rawSuggestion: String, rounded: Bool) -> UIButton {
+        let button = UIButton(type: .system)
+
+        if rounded {
+            var config = UIButton.Configuration.filled()
+            if #available(iOS 13.0, *) {
+                config.baseBackgroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return UIColor(red: 0.3, green: 0.3, blue: 0.32, alpha: 1.0)
+                    default:
+                        return UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
+                    }
+                }
+                config.baseForegroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return .white
+                    default:
+                        return .black
+                    }
+                }
+            } else {
+                config.baseBackgroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)
+                config.baseForegroundColor = .black
+            }
+            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+            config.cornerStyle = .capsule
+            config.attributedTitle = AttributedString(
+                displayText,
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+            )
+            button.configuration = config
+        } else {
+            var config = UIButton.Configuration.plain()
+            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
+            if #available(iOS 13.0, *) {
+                config.baseForegroundColor = UIColor { traitCollection in
+                    switch traitCollection.userInterfaceStyle {
+                    case .dark:
+                        return .white
+                    default:
+                        return .black
+                    }
+                }
+            } else {
+                config.baseForegroundColor = .black
+            }
+            config.attributedTitle = AttributedString(
+                displayText,
+                attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 16)])
+            )
+            button.configuration = config
         }
 
-        // Add word buttons (skip leading shared words)
-        let startIndex = min(leadingWordsCount, words.count)
-        for i in startIndex..<words.count {
-            let word = words[i]
-            let button = createWordButton(word, fullSuggestion: suggestion, wordIndex: i, rounded: isWord)
-            container.addArrangedSubview(button)
+        // Store raw suggestion with slashes for block selection
+        button.accessibilityLabel = rawSuggestion
+        button.accessibilityHint = "v11_block"  // Marker for v11 format
+
+        button.addTarget(self, action: #selector(blockSelectionButtonTapped(_:)), for: .touchUpInside)
+
+        return button
+    }
+
+    @objc private func blockSelectionButtonTapped(_ sender: UIButton) {
+        guard let rawSuggestion = sender.accessibilityLabel else { return }
+
+        // Split by / to get blocks
+        let blocks = rawSuggestion.split(separator: "/").map { String($0) }
+        guard blocks.count > 1 else {
+            // Only one block, just select it
+            delegate?.suggestionBar(self, didSelectSuggestion: rawSuggestion.replacingOccurrences(of: "/", with: ""))
+            return
         }
 
-        return container
-        */
+        // Show block selection overlay
+        showBlockSelectionOverlay(blocks: blocks, sourceButton: sender)
+    }
+
+    private func showBlockSelectionOverlay(blocks: [String], sourceButton: UIButton) {
+        // Remove existing overlay
+        blockSelectionOverlay?.removeFromSuperview()
+
+        // Create overlay container
+        let overlay = UIView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        if #available(iOS 13.0, *) {
+            overlay.backgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.2, green: 0.2, blue: 0.22, alpha: 0.98)
+                default:
+                    return UIColor(white: 1.0, alpha: 0.98)
+                }
+            }
+        } else {
+            overlay.backgroundColor = UIColor(white: 1.0, alpha: 0.98)
+        }
+        overlay.layer.cornerRadius = 12
+        overlay.layer.shadowColor = UIColor.black.cgColor
+        overlay.layer.shadowOpacity = 0.3
+        overlay.layer.shadowOffset = CGSize(width: 0, height: 2)
+        overlay.layer.shadowRadius = 8
+
+        // Create horizontal scroll view for block buttons
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsHorizontalScrollIndicator = false
+        overlay.addSubview(scrollView)
+
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.spacing = 4
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(stackView)
+
+        // Create individual block buttons (tap = cumulative up to that block)
+        for (index, block) in blocks.enumerated() {
+            let cumulative = blocks[0...index].joined()
+            let button = createBlockButton(displayText: block, cumulativeText: cumulative, blockIndex: index)
+            stackView.addArrangedSubview(button)
+        }
+
+        // Add close button
+        let closeButton = UIButton(type: .system)
+        closeButton.setTitle("✕", for: .normal)
+        closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        closeButton.addTarget(self, action: #selector(closeBlockSelectionOverlay), for: .touchUpInside)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        overlay.addSubview(closeButton)
+
+        // Add to superview (keyboard view)
+        if let keyboardView = superview {
+            keyboardView.addSubview(overlay)
+            blockSelectionOverlay = overlay
+
+            NSLayoutConstraint.activate([
+                overlay.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor, constant: 8),
+                overlay.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor, constant: -8),
+                overlay.bottomAnchor.constraint(equalTo: self.topAnchor, constant: -4),
+                overlay.heightAnchor.constraint(equalToConstant: 50),
+
+                scrollView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 8),
+                scrollView.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
+                scrollView.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 4),
+                scrollView.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -4),
+
+                stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                stackView.heightAnchor.constraint(equalTo: scrollView.heightAnchor),
+
+                closeButton.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -12),
+                closeButton.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+                closeButton.widthAnchor.constraint(equalToConstant: 30)
+            ])
+        }
+    }
+
+    private func createBlockButton(displayText: String, cumulativeText: String, blockIndex: Int) -> UIButton {
+        let button = UIButton(type: .system)
+
+        var config = UIButton.Configuration.filled()
+        if #available(iOS 13.0, *) {
+            config.baseBackgroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return UIColor(red: 0.35, green: 0.35, blue: 0.38, alpha: 1.0)
+                default:
+                    return UIColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1.0)
+                }
+            }
+            config.baseForegroundColor = UIColor { traitCollection in
+                switch traitCollection.userInterfaceStyle {
+                case .dark:
+                    return .white
+                default:
+                    return .black
+                }
+            }
+        } else {
+            config.baseBackgroundColor = UIColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1.0)
+            config.baseForegroundColor = .black
+        }
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
+        config.cornerStyle = .medium
+        config.attributedTitle = AttributedString(
+            displayText,
+            attributes: AttributeContainer([.font: UIFont.systemFont(ofSize: 14, weight: .medium)])
+        )
+        button.configuration = config
+
+        // Store cumulative text for selection
+        button.accessibilityLabel = cumulativeText
+        button.tag = blockIndex
+        button.addTarget(self, action: #selector(blockButtonTapped(_:)), for: .touchUpInside)
+
+        return button
+    }
+
+    @objc private func blockButtonTapped(_ sender: UIButton) {
+        guard let cumulativeText = sender.accessibilityLabel else { return }
+
+        // Close overlay and send cumulative selection
+        closeBlockSelectionOverlay()
+        delegate?.suggestionBar(self, didSelectSuggestion: cumulativeText)
+    }
+
+    @objc private func closeBlockSelectionOverlay() {
+        blockSelectionOverlay?.removeFromSuperview()
+        blockSelectionOverlay = nil
     }
 
     private func createWordButton(_ word: String, fullSuggestion: String, wordIndex: Int = -1, rounded: Bool = false) -> UIButton {

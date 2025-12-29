@@ -147,6 +147,60 @@ class TextProcessor {
         return ""
     }
 
+    /// Splits text into context and conversion prefix for v11 format
+    /// Returns (context, prefix) where prefix is the trailing keyboard-inputtable characters
+    /// Example: "ありがとうご" -> ("ありがとう", "ご")
+    static func splitForV11(_ text: String) -> (context: String, prefix: String) {
+        guard !text.isEmpty else {
+            return ("", "")
+        }
+
+        // Find trailing keyboard-inputtable characters (hiragana, alphabet, numbers)
+        // Pattern matches: hiragana (あ-ん), prolonged sound mark (ー), alphabet (A-Za-z), space
+        var prefixStartIndex = text.endIndex
+
+        for index in text.indices.reversed() {
+            let char = text[index]
+            if isKeyboardInputtableChar(char) {
+                prefixStartIndex = index
+            } else {
+                break
+            }
+        }
+
+        let context = String(text[..<prefixStartIndex])
+        let prefix = String(text[prefixStartIndex...])
+
+        return (context, prefix)
+    }
+
+    /// Checks if a character can be directly input from the keyboard (hiragana, alphabet, etc.)
+    private static func isKeyboardInputtableChar(_ char: Character) -> Bool {
+        let scalar = char.unicodeScalars.first!.value
+
+        // Hiragana: U+3040 - U+309F
+        if scalar >= 0x3040 && scalar <= 0x309F {
+            return true
+        }
+
+        // Latin alphabet (A-Z, a-z)
+        if (scalar >= 0x41 && scalar <= 0x5A) || (scalar >= 0x61 && scalar <= 0x7A) {
+            return true
+        }
+
+        // Space
+        if char == " " || char == "　" {
+            return true
+        }
+
+        // Prolonged sound mark (ー)
+        if char == "ー" {
+            return true
+        }
+
+        return false
+    }
+
     /// Normalizes text for consistency (matches web version exactly)
     static func normalize(_ text: String, isLastInputFromSuggestion: Bool = false) -> String {
         var normalized = text

@@ -58,10 +58,11 @@ struct GeneralSettingsTab: View {
                     Text("Smart (gemini-2.0-flash)").tag("smart")
                     Text("Classic (gemini-2.0-flash)").tag("classic")
                     Text("Gemini 2.5 Flash").tag("gemini_2_5_flash")
+                    Text("Voice v11 (Tuned)").tag("voice_v11")
                 }
                 .pickerStyle(.menu)
 
-                Text("Smart model provides better suggestions but may be slower.")
+                Text("Voice v11 is a fine-tuned model optimized for Japanese input.")
                     .font(.caption)
                     .foregroundColor(.gray)
             }

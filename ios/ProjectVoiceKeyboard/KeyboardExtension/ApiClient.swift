@@ -83,11 +83,16 @@ class ApiClient {
         // Split text to send only last ~30 chars to LLM (matching web version)
         let (_, textForLLM) = TextProcessor.splitLastFewSentencesForLLM(text)
 
+        // For v11: split into context and prefix
+        let (v11Context, v11Prefix) = TextProcessor.splitForV11(textForLLM)
+
         // Prepare request context (matching web version structure)
         let userInputs: [String: String] = [
             "language": currentLanguage,
             "num": String(settings.getSuggestionCount()),
             "text": textForLLM,  // Send only last few sentences
+            "v11_context": v11Context,  // For v11: text before [---]
+            "v11_prefix": v11Prefix,    // For v11: text after [---]
             "persona": settings.persona,
             "lastOutputSpeech": settings.lastOutputSpeech,
             "lastInputSpeech": settings.lastInputSpeech,
@@ -95,45 +100,67 @@ class ApiClient {
             "sentenceEmotion": emotion.rawValue
         ]
 
-        // Fetch both sentence and word suggestions in parallel
-        let group = DispatchGroup()
+        // Check if this is a tuned model (model starts with "voice-")
+        let isTunedModel = aiConfig.model.hasPrefix("voice-")
 
-        var sentenceSuggestions: [String] = []
-        var wordSuggestions: [String] = []
+        if isTunedModel {
+            // Tuned models: single request, returns sentences only (no word suggestions)
+            fetchMacro(
+                baseURL: baseURL,
+                macroId: "",  // Not used for tuned models
+                model: aiConfig.model,
+                userInputs: userInputs,
+                temperature: 0.0
+            ) { suggestions in
+                DispatchQueue.main.async {
+                    let response = SuggestionResponse(
+                        sentences: suggestions,
+                        words: []  // Tuned models don't provide word suggestions
+                    )
+                    completion(response)
+                }
+            }
+        } else {
+            // Standard models: fetch both sentence and word suggestions in parallel
+            let group = DispatchGroup()
 
-        // Fetch sentence suggestions
-        group.enter()
-        fetchMacro(
-            baseURL: baseURL,
-            macroId: aiConfig.sentenceMacro,
-            model: aiConfig.model,
-            userInputs: userInputs,
-            temperature: 0.0
-        ) { sentences in
-            sentenceSuggestions = sentences
-            group.leave()
-        }
+            var sentenceSuggestions: [String] = []
+            var wordSuggestions: [String] = []
 
-        // Fetch word suggestions
-        group.enter()
-        fetchMacro(
-            baseURL: baseURL,
-            macroId: aiConfig.wordMacro,
-            model: aiConfig.model,
-            userInputs: userInputs,
-            temperature: 0.0
-        ) { words in
-            wordSuggestions = words
-            group.leave()
-        }
+            // Fetch sentence suggestions
+            group.enter()
+            fetchMacro(
+                baseURL: baseURL,
+                macroId: aiConfig.sentenceMacro,
+                model: aiConfig.model,
+                userInputs: userInputs,
+                temperature: 0.0
+            ) { sentences in
+                sentenceSuggestions = sentences
+                group.leave()
+            }
 
-        // Wait for both to complete
-        group.notify(queue: .main) {
-            let response = SuggestionResponse(
-                sentences: sentenceSuggestions,
-                words: wordSuggestions
-            )
-            completion(response)
+            // Fetch word suggestions
+            group.enter()
+            fetchMacro(
+                baseURL: baseURL,
+                macroId: aiConfig.wordMacro,
+                model: aiConfig.model,
+                userInputs: userInputs,
+                temperature: 0.0
+            ) { words in
+                wordSuggestions = words
+                group.leave()
+            }
+
+            // Wait for both to complete
+            group.notify(queue: .main) {
+                let response = SuggestionResponse(
+                    sentences: sentenceSuggestions,
+                    words: wordSuggestions
+                )
+                completion(response)
+            }
         }
     }
 

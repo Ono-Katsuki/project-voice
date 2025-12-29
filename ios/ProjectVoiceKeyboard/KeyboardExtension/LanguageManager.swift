@@ -166,6 +166,11 @@ class JapaneseLanguage: Language {
             model: "gemini-2.5-flash",
             sentenceMacro: "SentenceJapaneseLong20250603",
             wordMacro: "WordGeneric20240628"
+        ),
+        "voice_v11": AIConfig(
+            model: "voice-v11",
+            sentenceMacro: "",  // Not used for tuned models
+            wordMacro: ""       // Not used for tuned models
         )
     ]
 }
