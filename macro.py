@@ -123,18 +123,24 @@ JINJA_ENV = jinja2.Environment(
     lstrip_blocks=True)
 
 
-def _build_v11_prompt(context, prefix, tone_prompt):
+def _build_v11_prompt(history, last_sentence, prefix, tone_prompt):
   """Build v11 format prompt with tone.
 
   Args:
-    context: The confirmed text before [---]
+    history: The context before the last sentence (for reference)
+    last_sentence: The last sentence being typed (prediction target)
     prefix: The conversion target prefix after [---]
     tone_prompt: The tone-specific prompt
 
   Returns:
     Formatted prompt string
   """
-  return f"{V11_PROMPT_HEADER}\n{tone_prompt}\n{V11_MARKER_LINE}\n{context}[---]{prefix}"
+  # Build context section if history exists
+  context_section = ""
+  if history:
+    context_section = f"\n<文脈>\n{history}\n"
+
+  return f"{V11_PROMPT_HEADER}\n{tone_prompt}{context_section}\n{V11_MARKER_LINE}\n{last_sentence}[---]{prefix}"
 
 
 def _parse_v11_output(output_text):
@@ -198,11 +204,11 @@ def _select_diverse_suggestions(suggestions, num_select=4):
   return [s[1] for s in selected]
 
 
-def _generate_one_tone(client, endpoint, context, prefix, tone_id):
+def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id):
   """Generate prediction for one tone."""
   tone_prompt = V11_TONE_PROMPTS.get(tone_id, '')
   temperature = V11_TONE_TEMPERATURES.get(tone_id, 0.3)
-  prompt = _build_v11_prompt(context, prefix, tone_prompt)
+  prompt = _build_v11_prompt(history, last_sentence, prefix, tone_prompt)
 
   try:
     response = client.models.generate_content(
@@ -241,15 +247,22 @@ def RunTunedModel(model_id, user_inputs, temperature):
   if not config:
     return json.dumps({'messages': []})
 
-  # Get context and prefix for v11 format
-  context = user_inputs.get('v11_context', '')
+  # Get v11 format parameters
+  # v11_history: context before the last sentence (for reference)
+  # v11_last_sentence: the last sentence being typed (without prefix)
+  # v11_prefix: the keyboard input to be converted (hiragana/alphabet)
+  history = user_inputs.get('v11_history', '')
+  last_sentence = user_inputs.get('v11_last_sentence', '')
   prefix = user_inputs.get('v11_prefix', '')
 
-  # Fallback: if v11_context/v11_prefix not provided, use text
-  if not context and not prefix:
-    text = user_inputs.get('text', '')
-    context = text
-    prefix = ''
+  # Fallback: if new params not provided, use legacy v11_context
+  if not last_sentence and not prefix:
+    context = user_inputs.get('v11_context', '')
+    if context:
+      last_sentence = context
+    else:
+      text = user_inputs.get('text', '')
+      last_sentence = text
 
   # Create Vertex AI client
   client = genai.Client(
@@ -265,7 +278,7 @@ def RunTunedModel(model_id, user_inputs, temperature):
   suggestions = []
   with ThreadPoolExecutor(max_workers=8) as executor:
     futures = {
-        executor.submit(_generate_one_tone, client, endpoint, context, prefix, tone_id): tone_id
+        executor.submit(_generate_one_tone, client, endpoint, history, last_sentence, prefix, tone_id): tone_id
         for tone_id in tone_ids
     }
     for future in as_completed(futures):

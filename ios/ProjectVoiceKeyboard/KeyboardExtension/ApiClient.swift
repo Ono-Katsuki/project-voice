@@ -85,16 +85,24 @@ class ApiClient {
         // Split text to send only last ~30 chars to LLM (matching web version)
         let (_, textForLLM) = TextProcessor.splitLastFewSentencesForLLM(text)
 
-        // For v11: split into context and prefix
-        let (v11Context, v11Prefix) = TextProcessor.splitForV11(textForLLM)
+        // For v11: split into history, last sentence, and prefix
+        // 1. Split to get history (sentences before last) and last sentence
+        let (v11History, lastSentence) = TextProcessor.splitLastSentence(text)
+        // 2. Split last sentence into confirmed part and keyboard input prefix
+        let (v11LastSentence, v11Prefix) = TextProcessor.splitForV11(lastSentence)
+
+        // Legacy v11_context for backwards compatibility
+        let (v11Context, _) = TextProcessor.splitForV11(textForLLM)
 
         // Prepare request context (matching web version structure)
         let userInputs: [String: String] = [
             "language": currentLanguage,
             "num": String(settings.getSuggestionCount()),
             "text": textForLLM,  // Send only last few sentences
-            "v11_context": v11Context,  // For v11: text before [---]
-            "v11_prefix": v11Prefix,    // For v11: text after [---]
+            "v11_context": v11Context,  // Legacy: for backwards compatibility
+            "v11_history": v11History,  // For v11: context before last sentence
+            "v11_last_sentence": v11LastSentence,  // For v11: last sentence (without prefix)
+            "v11_prefix": v11Prefix,    // For v11: keyboard input to convert
             "persona": settings.persona,
             "lastOutputSpeech": settings.lastOutputSpeech,
             "lastInputSpeech": settings.lastInputSpeech,
