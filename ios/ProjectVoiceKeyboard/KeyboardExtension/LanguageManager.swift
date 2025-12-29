@@ -171,6 +171,11 @@ class JapaneseLanguage: Language {
             model: "voice-v11",
             sentenceMacro: "",  // Not used for tuned models
             wordMacro: ""       // Not used for tuned models
+        ),
+        "voice_v11_simple": AIConfig(
+            model: "voice-v11",
+            sentenceMacro: "",  // Not used for tuned models
+            wordMacro: ""       // Not used for tuned models
         )
     ]
 }

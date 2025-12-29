@@ -94,21 +94,28 @@ class ApiClient {
         // Legacy v11_context for backwards compatibility
         let (v11Context, _) = TextProcessor.splitForV11(textForLLM)
 
+        // Check if simple mode (no context)
+        let isSimpleMode = aiConfigName == "voice_v11_simple"
+
         // Prepare request context (matching web version structure)
-        let userInputs: [String: String] = [
+        var userInputs: [String: String] = [
             "language": currentLanguage,
             "num": String(settings.getSuggestionCount()),
             "text": textForLLM,  // Send only last few sentences
             "v11_context": v11Context,  // Legacy: for backwards compatibility
-            "v11_history": v11History,  // For v11: context before last sentence
             "v11_last_sentence": v11LastSentence,  // For v11: last sentence (without prefix)
             "v11_prefix": v11Prefix,    // For v11: keyboard input to convert
-            "persona": settings.persona,
-            "lastOutputSpeech": settings.lastOutputSpeech,
-            "lastInputSpeech": settings.lastInputSpeech,
-            "conversationHistory": settings.getConversationHistoryString(),
             "sentenceEmotion": emotion.rawValue
         ]
+
+        // Add context only if not simple mode
+        if !isSimpleMode {
+            userInputs["v11_history"] = v11History  // For v11: context before last sentence
+            userInputs["persona"] = settings.persona
+            userInputs["lastOutputSpeech"] = settings.lastOutputSpeech
+            userInputs["lastInputSpeech"] = settings.lastInputSpeech
+            userInputs["conversationHistory"] = settings.getConversationHistoryString()
+        }
 
         // Check if this is a tuned model (model starts with "voice-")
         let isTunedModel = aiConfig.model.hasPrefix("voice-")

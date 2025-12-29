@@ -438,7 +438,7 @@ class KeyboardView: UIView {
             toggleShift()
         case "123", "☆123", "ABC", "#+=", "あいう", "#":
             handleModeSwitch(key)
-        case "v11", "2.5F", "smart", "fast", "clsc", "AI":
+        case "v11", "v11s", "2.5F", "smart", "fast", "clsc", "AI":
             cycleModel()
         case "空白":
             delegate?.keyboardView(self, didTapKey: "space")
@@ -499,6 +499,8 @@ class KeyboardView: UIView {
         switch aiConfig {
         case "voice_v11":
             return "v11"
+        case "voice_v11_simple":
+            return "v11s"
         case "gemini_2_5_flash":
             return "2.5F"
         case "smart":
@@ -513,7 +515,7 @@ class KeyboardView: UIView {
     }
 
     private func cycleModel() {
-        let models = ["smart", "voice_v11", "gemini_2_5_flash", "fast"]
+        let models = ["smart", "voice_v11", "voice_v11_simple", "gemini_2_5_flash", "fast"]
         let currentModel = UserSettings.shared.aiConfig
         let currentIndex = models.firstIndex(of: currentModel) ?? 0
         let nextIndex = (currentIndex + 1) % models.count
