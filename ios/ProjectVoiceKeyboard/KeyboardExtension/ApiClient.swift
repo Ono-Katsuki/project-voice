@@ -72,6 +72,7 @@ class ApiClient {
 
         let currentLanguage = settings.currentLanguage
         let aiConfigName = settings.aiConfig
+        NSLog("[ApiClient] aiConfigName from settings: %@", aiConfigName)
 
         // Get AI configuration for current language
         guard let aiConfig = LanguageManager.shared.getAIConfig(languageCode: currentLanguage, configName: aiConfigName) else {
@@ -79,6 +80,7 @@ class ApiClient {
             completion(nil)
             return
         }
+        NSLog("[ApiClient] Using model: %@", aiConfig.model)
 
         // Split text to send only last ~30 chars to LLM (matching web version)
         let (_, textForLLM) = TextProcessor.splitLastFewSentencesForLLM(text)

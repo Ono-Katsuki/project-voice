@@ -140,8 +140,8 @@ class KeyboardView: UIView {
 
         let keys = getCurrentKeys()
 
-        // Fixed left column buttons: mode switches and keyboard switch
-        let leftColumnKeys = ["☆123", "ABC", "あいう", "🌐"]
+        // Fixed left column buttons: mode switches, keyboard switch, and model switch
+        let leftColumnKeys = ["☆123", "ABC", "あいう", "🌐", getModelButtonLabel()]
 
         // Fixed right column buttons: delete, space, return
         let rightColumnKeys = ["delete", "空白", "改行"]
@@ -438,6 +438,8 @@ class KeyboardView: UIView {
             toggleShift()
         case "123", "☆123", "ABC", "#+=", "あいう", "#":
             handleModeSwitch(key)
+        case "v11", "2.5F", "smart", "fast", "clsc", "AI":
+            cycleModel()
         case "空白":
             delegate?.keyboardView(self, didTapKey: "space")
         case "改行":
@@ -490,6 +492,34 @@ class KeyboardView: UIView {
         case .symbol:
             return symbolKeys
         }
+    }
+
+    private func getModelButtonLabel() -> String {
+        let aiConfig = UserSettings.shared.aiConfig
+        switch aiConfig {
+        case "voice_v11":
+            return "v11"
+        case "gemini_2_5_flash":
+            return "2.5F"
+        case "smart":
+            return "smart"
+        case "fast":
+            return "fast"
+        case "classic":
+            return "clsc"
+        default:
+            return "AI"
+        }
+    }
+
+    private func cycleModel() {
+        let models = ["smart", "voice_v11", "gemini_2_5_flash", "fast"]
+        let currentModel = UserSettings.shared.aiConfig
+        let currentIndex = models.firstIndex(of: currentModel) ?? 0
+        let nextIndex = (currentIndex + 1) % models.count
+        UserSettings.shared.aiConfig = models[nextIndex]
+        NSLog("[KeyboardView] Model switched to: %@", models[nextIndex])
+        renderKeyboard()
     }
 
     private func getModeButtonLabel() -> String {
