@@ -123,7 +123,8 @@ JINJA_ENV = jinja2.Environment(
     lstrip_blocks=True)
 
 
-def _build_v11_prompt(history, last_sentence, prefix, tone_prompt):
+def _build_v11_prompt(history, last_sentence, prefix, tone_prompt,
+                      persona='', conversation_history='', emotion=''):
   """Build v11 format prompt with tone.
 
   Args:
@@ -131,14 +132,37 @@ def _build_v11_prompt(history, last_sentence, prefix, tone_prompt):
     last_sentence: The last sentence being typed (prediction target)
     prefix: The conversion target prefix after [---]
     tone_prompt: The tone-specific prompt
+    persona: User persona description
+    conversation_history: Recent conversation history
+    emotion: Sentence emotion (statement, question, request, negative)
 
   Returns:
     Formatted prompt string
   """
-  # Build context section if history exists
-  context_section = ""
+  # Build supplementary sections
+  sections = []
+
+  if persona:
+    sections.append(f"<ペルソナ>\n{persona}")
+
+  if conversation_history:
+    sections.append(f"<会話履歴>\n{conversation_history}")
+
+  if emotion and emotion != 'statement':
+    emotion_labels = {
+        'question': '質問文',
+        'request': '依頼・お願い',
+        'negative': '否定文'
+    }
+    emotion_label = emotion_labels.get(emotion, emotion)
+    sections.append(f"<文のタイプ>\n{emotion_label}")
+
   if history:
-    context_section = f"\n<文脈>\n{history}\n"
+    sections.append(f"<文脈>\n{history}")
+
+  context_section = ""
+  if sections:
+    context_section = "\n" + "\n\n".join(sections) + "\n"
 
   return f"{V11_PROMPT_HEADER}\n{tone_prompt}{context_section}\n{V11_MARKER_LINE}\n{last_sentence}[---]{prefix}"
 
@@ -204,11 +228,13 @@ def _select_diverse_suggestions(suggestions, num_select=4):
   return [s[1] for s in selected]
 
 
-def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id):
+def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id,
+                       persona='', conversation_history='', emotion=''):
   """Generate prediction for one tone."""
   tone_prompt = V11_TONE_PROMPTS.get(tone_id, '')
   temperature = V11_TONE_TEMPERATURES.get(tone_id, 0.3)
-  prompt = _build_v11_prompt(history, last_sentence, prefix, tone_prompt)
+  prompt = _build_v11_prompt(history, last_sentence, prefix, tone_prompt,
+                             persona, conversation_history, emotion)
 
   try:
     response = client.models.generate_content(
@@ -264,6 +290,11 @@ def RunTunedModel(model_id, user_inputs, temperature):
       text = user_inputs.get('text', '')
       last_sentence = text
 
+  # Get supplementary context
+  persona = user_inputs.get('persona', '')
+  conversation_history = user_inputs.get('conversationHistory', '')
+  emotion = user_inputs.get('sentenceEmotion', '')
+
   # Create Vertex AI client
   client = genai.Client(
       vertexai=True,
@@ -278,7 +309,8 @@ def RunTunedModel(model_id, user_inputs, temperature):
   suggestions = []
   with ThreadPoolExecutor(max_workers=8) as executor:
     futures = {
-        executor.submit(_generate_one_tone, client, endpoint, history, last_sentence, prefix, tone_id): tone_id
+        executor.submit(_generate_one_tone, client, endpoint, history, last_sentence, prefix, tone_id,
+                        persona, conversation_history, emotion): tone_id
         for tone_id in tone_ids
     }
     for future in as_completed(futures):
