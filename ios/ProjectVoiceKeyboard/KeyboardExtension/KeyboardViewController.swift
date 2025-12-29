@@ -281,13 +281,12 @@ extension KeyboardViewController: KeyboardViewDelegate {
             return
         }
 
-        // Try to convert last character to small kana
-        if let converted = JapaneseKanaProcessor.convertLastCharToSmallKana(currentText) {
-            // Delete current text and insert converted version
-            for _ in 0..<currentText.count {
-                proxy.deleteBackward()
-            }
-            proxy.insertText(converted)
+        // Cycle through: normal → dakuten → handakuten → small → normal
+        if let converted = JapaneseKanaProcessor.cycleKanaConversion(currentText) {
+            // Delete last character and insert converted version
+            proxy.deleteBackward()
+            let newLastChar = String(converted.suffix(1))
+            proxy.insertText(newLastChar)
         }
     }
 }

@@ -405,9 +405,36 @@ class HistoryProcessor {
     }
 }
 
-// MARK: - Japanese Small Kana Processing
+// MARK: - Japanese Kana Processing (Dakuten, Handakuten, Small)
 
 class JapaneseKanaProcessor {
+
+    // Dakuten (濁点) conversion: か→が, さ→ざ, etc.
+    private static let dakutenMap: [String: String] = [
+        // Hiragana
+        "か": "が", "き": "ぎ", "く": "ぐ", "け": "げ", "こ": "ご",
+        "さ": "ざ", "し": "じ", "す": "ず", "せ": "ぜ", "そ": "ぞ",
+        "た": "だ", "ち": "ぢ", "つ": "づ", "て": "で", "と": "ど",
+        "は": "ば", "ひ": "び", "ふ": "ぶ", "へ": "べ", "ほ": "ぼ",
+        "う": "ゔ",
+        // Katakana
+        "カ": "ガ", "キ": "ギ", "ク": "グ", "ケ": "ゲ", "コ": "ゴ",
+        "サ": "ザ", "シ": "ジ", "ス": "ズ", "セ": "ゼ", "ソ": "ゾ",
+        "タ": "ダ", "チ": "ヂ", "ツ": "ヅ", "テ": "デ", "ト": "ド",
+        "ハ": "バ", "ヒ": "ビ", "フ": "ブ", "ヘ": "ベ", "ホ": "ボ",
+        "ウ": "ヴ"
+    ]
+
+    // Handakuten (半濁点) conversion: は→ぱ, etc.
+    private static let handakutenMap: [String: String] = [
+        // Hiragana
+        "は": "ぱ", "ひ": "ぴ", "ふ": "ぷ", "へ": "ぺ", "ほ": "ぽ",
+        // Katakana
+        "ハ": "パ", "ヒ": "ピ", "フ": "プ", "ヘ": "ペ", "ホ": "ポ",
+        // From dakuten to handakuten
+        "ば": "ぱ", "び": "ぴ", "ぶ": "ぷ", "べ": "ぺ", "ぼ": "ぽ",
+        "バ": "パ", "ビ": "ピ", "ブ": "プ", "ベ": "ペ", "ボ": "ポ"
+    ]
 
     // Small kana conversion maps
     private static let smallKanaMap: [String: String] = [
@@ -419,6 +446,23 @@ class JapaneseKanaProcessor {
         "ツ": "ッ", "ワ": "ヮ"
     ]
 
+    // Reverse maps for cycling back
+    private static let dakutenInvertMap: [String: String] = {
+        var invertMap: [String: String] = [:]
+        for (key, value) in dakutenMap {
+            invertMap[value] = key
+        }
+        return invertMap
+    }()
+
+    private static let handakutenInvertMap: [String: String] = {
+        var invertMap: [String: String] = [:]
+        for (key, value) in handakutenMap {
+            invertMap[value] = key
+        }
+        return invertMap
+    }()
+
     private static let smallKanaInvertMap: [String: String] = {
         var invertMap: [String: String] = [:]
         for (key, value) in smallKanaMap {
@@ -427,7 +471,54 @@ class JapaneseKanaProcessor {
         return invertMap
     }()
 
-    /// Converts the last character to small kana if possible
+    /// Cycles through kana conversions: normal → dakuten → handakuten → small → normal
+    static func cycleKanaConversion(_ text: String) -> String? {
+        guard !text.isEmpty else { return nil }
+
+        let lastChar = String(text.suffix(1))
+        let prefix = String(text.dropLast())
+
+        // Check if it's a small kana -> convert to normal
+        if let normal = smallKanaInvertMap[lastChar] {
+            return prefix + normal
+        }
+
+        // Check if it's a handakuten kana -> convert to small (if available) or normal
+        if let normal = handakutenInvertMap[lastChar] {
+            // Try small kana first
+            if let small = smallKanaMap[normal] {
+                return prefix + small
+            }
+            return prefix + normal
+        }
+
+        // Check if it's a dakuten kana -> convert to handakuten (if available) or small or normal
+        if let normal = dakutenInvertMap[lastChar] {
+            // Try handakuten first (only for ha-row)
+            if let handakuten = handakutenMap[normal] {
+                return prefix + handakuten
+            }
+            // Try small kana
+            if let small = smallKanaMap[normal] {
+                return prefix + small
+            }
+            return prefix + normal
+        }
+
+        // Normal kana -> try dakuten first
+        if let dakuten = dakutenMap[lastChar] {
+            return prefix + dakuten
+        }
+
+        // No dakuten available -> try small kana
+        if let small = smallKanaMap[lastChar] {
+            return prefix + small
+        }
+
+        return nil
+    }
+
+    /// Converts the last character to small kana if possible (legacy method)
     static func convertLastCharToSmallKana(_ text: String) -> String? {
         guard !text.isEmpty else { return nil }
 
