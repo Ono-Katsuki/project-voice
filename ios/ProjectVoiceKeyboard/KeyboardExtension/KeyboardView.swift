@@ -561,6 +561,10 @@ class KeyboardView: UIView {
         suggestionBar.updateSuggestions(sentences: sentences, words: words, currentText: currentText)
     }
 
+    func clearSuggestions() {
+        suggestionBar.updateSuggestions(sentences: [], words: [], currentText: "")
+    }
+
     func showInitialPhrases(_ phrases: [String]) {
         suggestionBar.showInitialPhrases(phrases)
     }

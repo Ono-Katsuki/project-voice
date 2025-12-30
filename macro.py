@@ -236,6 +236,15 @@ def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id
   prompt = _build_v11_prompt(history, last_sentence, prefix, tone_prompt,
                              persona, conversation_history, emotion)
 
+  # Debug: log prompt for first tone only
+  if tone_id == 'neutral':
+    print(f'[DEBUG v11] history={repr(history[:50] if history else "")}', flush=True)
+    print(f'[DEBUG v11] last_sentence={repr(last_sentence[:50] if last_sentence else "")}', flush=True)
+    print(f'[DEBUG v11] prefix={repr(prefix)}', flush=True)
+    print(f'[DEBUG v11] persona={repr(persona[:30] if persona else "")}', flush=True)
+    print(f'[DEBUG v11] emotion={repr(emotion)}', flush=True)
+    print(f'[DEBUG v11] prompt preview: {repr(prompt[:200])}', flush=True)
+
   try:
     response = client.models.generate_content(
         model=endpoint,
@@ -295,6 +304,12 @@ def RunTunedModel(model_id, user_inputs, temperature):
   conversation_history = user_inputs.get('conversationHistory', '')
   emotion = user_inputs.get('sentenceEmotion', '')
 
+  # Debug: log ALL user_inputs keys and values
+  print(f'[DEBUG v11] ALL KEYS: {list(user_inputs.keys())}', flush=True)
+  for k, v in user_inputs.items():
+    val_preview = repr(v[:50]) if v and len(v) > 50 else repr(v)
+    print(f'[DEBUG v11] {k}={val_preview}', flush=True)
+
   # Create Vertex AI client
   client = genai.Client(
       vertexai=True,
@@ -323,6 +338,9 @@ def RunTunedModel(model_id, user_inputs, temperature):
 
   # Select 3 most diverse suggestions
   selected = _select_diverse_suggestions(suggestions, num_select=3)
+
+  # Debug: log selected suggestions
+  print(f'[DEBUG v11] selected suggestions: {selected}', flush=True)
 
   # Format as numbered list
   numbered_list = '\n'.join(f'{i+1}. {s}' for i, s in enumerate(selected))

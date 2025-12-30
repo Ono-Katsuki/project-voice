@@ -87,7 +87,8 @@ class ApiClient {
 
         // For v11: split into history, last sentence, and prefix
         // 1. Split to get history (sentences before last) and last sentence
-        let (v11History, lastSentence) = TextProcessor.splitLastSentence(text)
+        // Use textForLLM to avoid sending too much context
+        let (v11History, lastSentence) = TextProcessor.splitLastSentence(textForLLM)
         // 2. Split last sentence into confirmed part and keyboard input prefix
         let (v11LastSentence, v11Prefix) = TextProcessor.splitForV11(lastSentence)
 
@@ -97,20 +98,20 @@ class ApiClient {
         // Check if simple mode (no context)
         let isSimpleMode = aiConfigName == "voice_v11_simple"
 
-        // Prepare request context (matching web version structure)
+        // Prepare request context
         var userInputs: [String: String] = [
             "language": currentLanguage,
             "num": String(settings.getSuggestionCount()),
-            "text": textForLLM,  // Send only last few sentences
-            "v11_context": v11Context,  // Legacy: for backwards compatibility
             "v11_last_sentence": v11LastSentence,  // For v11: last sentence (without prefix)
-            "v11_prefix": v11Prefix,    // For v11: keyboard input to convert
-            "sentenceEmotion": emotion.rawValue
+            "v11_prefix": v11Prefix     // For v11: keyboard input to convert
         ]
 
         // Add context only if not simple mode
         if !isSimpleMode {
+            userInputs["text"] = textForLLM  // Send only last few sentences
+            userInputs["v11_context"] = v11Context  // Legacy: for backwards compatibility
             userInputs["v11_history"] = v11History  // For v11: context before last sentence
+            userInputs["sentenceEmotion"] = emotion.rawValue
             userInputs["persona"] = settings.persona
             userInputs["lastOutputSpeech"] = settings.lastOutputSpeech
             userInputs["lastInputSpeech"] = settings.lastInputSpeech

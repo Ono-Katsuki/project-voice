@@ -27,10 +27,10 @@ class TextProcessor {
 
     /// Splits text into sentences based on punctuation (matches web version exactly)
     static func splitToSentences(_ text: String) -> [String] {
-        // Split by Japanese and English sentence terminators
-        // Pattern matches web version: ([。？！]|[.?!] ) *
-        // Japanese punctuation OR English punctuation + space, followed by optional spaces
-        let pattern = "([。？！]|[.?!] ) *"
+        // Split by Japanese and English sentence terminators, and newlines
+        // Pattern matches: Japanese punctuation, English punctuation, or newlines
+        // Includes: 。(U+3002), ？(U+FF1F), ！(U+FF01), ｡(U+FF61 half-width), \r\n
+        let pattern = "([。？！｡]+|[.?!]+\\s?|[\\r\\n]+) *"
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return [text]
         }

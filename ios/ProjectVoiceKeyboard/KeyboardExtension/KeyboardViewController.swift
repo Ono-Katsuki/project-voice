@@ -136,41 +136,57 @@ class KeyboardViewController: UIInputViewController {
             }
 
             DispatchQueue.main.async { [weak self] in
-                // Split text to get the portion that was sent to LLM (matches web version)
-                let (firstHalf, secondHalf) = TextProcessor.splitLastFewSentencesForLLM(text)
+                let settings = UserSettings.shared
+                let isV11 = settings.aiConfig == "voice_v11" || settings.aiConfig == "voice_v11_simple"
 
-                // Apply ignoreUnnecessaryDiffs to AI sentences using secondHalf (matches web version)
-                let processedSentences = response.sentences.map { sentence in
-                    firstHalf + DiffProcessor.ignoreUnnecessaryDiffs(original: secondHalf, modified: sentence)
-                }
+                var processedSentences: [String]
 
-                // Combine history + processed AI sentences
-                var allSentences = historySuggestions + processedSentences
-
-                // Remove duplicates from sentences
-                var seen = Set<String>()
-                allSentences = allSentences.filter { suggestion in
-                    let lowercased = suggestion.lowercased()
-                    if seen.contains(lowercased) {
-                        return false
+                if isV11 {
+                    // For v11: response is slash-separated tokens (e.g., "し/た/から/精度/高い")
+                    // Don't prepend context - it's handled during confirmation
+                    // Just use the response directly for block display
+                    processedSentences = response.sentences
+                } else {
+                    // For standard models: use ignoreUnnecessaryDiffs
+                    let (firstHalf, secondHalf) = TextProcessor.splitLastFewSentencesForLLM(text)
+                    processedSentences = response.sentences.map { sentence in
+                        firstHalf + DiffProcessor.ignoreUnnecessaryDiffs(original: secondHalf, modified: sentence)
                     }
-                    seen.insert(lowercased)
-                    return true
                 }
 
-                // Remove duplicates from words
-                var seenWords = Set<String>()
-                let uniqueWords = response.words.filter { word in
-                    let lowercased = word.lowercased()
-                    if seenWords.contains(lowercased) {
-                        return false
+                if isV11 {
+                    // For v11: show only 3 AI predictions (no history, no words)
+                    let suggestions = Array(processedSentences.prefix(3))
+                    self?.keyboardView.updateSuggestions(sentences: suggestions, words: [], currentText: text)
+                } else {
+                    // For standard models: combine history + AI sentences
+                    var allSentences = historySuggestions + processedSentences
+
+                    // Remove duplicates from sentences
+                    var seen = Set<String>()
+                    allSentences = allSentences.filter { suggestion in
+                        let lowercased = suggestion.lowercased()
+                        if seen.contains(lowercased) {
+                            return false
+                        }
+                        seen.insert(lowercased)
+                        return true
                     }
-                    seenWords.insert(lowercased)
-                    return true
-                }
 
-                // Update UI with separated sentences and words
-                self?.keyboardView.updateSuggestions(sentences: allSentences, words: uniqueWords, currentText: text)
+                    // Remove duplicates from words
+                    var seenWords = Set<String>()
+                    let uniqueWords = response.words.filter { word in
+                        let lowercased = word.lowercased()
+                        if seenWords.contains(lowercased) {
+                            return false
+                        }
+                        seenWords.insert(lowercased)
+                        return true
+                    }
+
+                    // Update UI with separated sentences and words
+                    self?.keyboardView.updateSuggestions(sentences: allSentences, words: uniqueWords, currentText: text)
+                }
             }
         }
     }
@@ -222,6 +238,9 @@ extension KeyboardViewController: KeyboardViewDelegate {
         let proxy = textDocumentProxy
         let settings = UserSettings.shared
 
+        // Clear suggestions immediately while loading
+        keyboardView.clearSuggestions()
+
         // Get current text before modification
         let currentText = proxy.documentContextBeforeInput ?? ""
 
@@ -257,6 +276,15 @@ extension KeyboardViewController: KeyboardViewDelegate {
         // Update conversation history
         settings.lastInputSpeech = normalizedSuggestion
         settings.addToConversationHistory(message: ConversationMessage(role: "user", content: normalizedSuggestion))
+
+        // Fetch next suggestions based on updated text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self = self else { return }
+            if let newText = self.textDocumentProxy.documentContextBeforeInput, !newText.isEmpty {
+                self.lastFetchedText = ""  // Force new fetch
+                self.fetchSuggestions(for: newText)
+            }
+        }
     }
 
     func keyboardViewDidRequestKeyboardChange(_ view: KeyboardView) {
