@@ -110,6 +110,11 @@ abstract class LatinScriptLanguage implements Language {
       sentence: 'SentenceGeneric20250311',
       word: 'WordGeneric20240628',
     },
+    voice_v11: {
+      model: 'voice-v11',
+      sentence: 'SentenceGeneric20250311',
+      word: 'WordGeneric20240628',
+    },
   };
 
   abstract render(): TemplateResult;
@@ -218,6 +223,11 @@ abstract class Japanese implements Language {
       model: 'gemini-2.5-flash',
       sentence: 'SentenceJapaneseLong20250603',
       word: 'WordGeneric20240628',
+    },
+    voice_v11: {
+      model: 'voice-v11',
+      sentence: 'SentenceJapaneseLong20250603',
+      word: 'WordJapanese20250623',
     },
   };
 

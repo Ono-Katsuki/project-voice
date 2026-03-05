@@ -237,13 +237,13 @@ def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id
                              persona, conversation_history, emotion)
 
   # Debug: log prompt for first tone only
-  if tone_id == 'neutral':
+  if tone_id == 'dev':
     print(f'[DEBUG v11] history={repr(history[:50] if history else "")}', flush=True)
     print(f'[DEBUG v11] last_sentence={repr(last_sentence[:50] if last_sentence else "")}', flush=True)
     print(f'[DEBUG v11] prefix={repr(prefix)}', flush=True)
     print(f'[DEBUG v11] persona={repr(persona[:30] if persona else "")}', flush=True)
     print(f'[DEBUG v11] emotion={repr(emotion)}', flush=True)
-    print(f'[DEBUG v11] prompt preview: {repr(prompt[:200])}', flush=True)
+    print(f'[DEBUG v11] prompt preview: {repr(prompt[:500])}', flush=True)
 
   try:
     response = client.models.generate_content(
@@ -256,8 +256,11 @@ def _generate_one_tone(client, endpoint, history, last_sentence, prefix, tone_id
         ),
     )
     if response.text:
+      # Debug: log raw model output
+      print(f'[DEBUG v11] tone={tone_id} raw_output={repr(response.text.strip()[:100])}', flush=True)
       prediction = _parse_v11_output(response.text.strip())
       if prediction:
+        print(f'[DEBUG v11] tone={tone_id} parsed_prediction={repr(prediction[:50])}', flush=True)
         return (tone_id, prediction)
   except Exception as e:
     print(f'[WARN] Tone {tone_id} failed: {e}')
@@ -282,7 +285,7 @@ def RunTunedModel(model_id, user_inputs, temperature):
   if not config:
     return json.dumps({'messages': []})
 
-  # Get v11 format parameters
+  # Get v11 format parameters (converted by _convert_to_v11_format)
   # v11_history: context before the last sentence (for reference)
   # v11_last_sentence: the last sentence being typed (without prefix)
   # v11_prefix: the keyboard input to be converted (hiragana/alphabet)
@@ -290,25 +293,15 @@ def RunTunedModel(model_id, user_inputs, temperature):
   last_sentence = user_inputs.get('v11_last_sentence', '')
   prefix = user_inputs.get('v11_prefix', '')
 
-  # Fallback: if new params not provided, use legacy v11_context
-  if not last_sentence and not prefix:
-    context = user_inputs.get('v11_context', '')
-    if context:
-      last_sentence = context
-    else:
-      text = user_inputs.get('text', '')
-      last_sentence = text
-
   # Get supplementary context
   persona = user_inputs.get('persona', '')
   conversation_history = user_inputs.get('conversationHistory', '')
   emotion = user_inputs.get('sentenceEmotion', '')
 
-  # Debug: log ALL user_inputs keys and values
-  print(f'[DEBUG v11] ALL KEYS: {list(user_inputs.keys())}', flush=True)
-  for k, v in user_inputs.items():
-    val_preview = repr(v[:50]) if v and len(v) > 50 else repr(v)
-    print(f'[DEBUG v11] {k}={val_preview}', flush=True)
+  # Debug: log v11 parameters (similar to Gemini)
+  print(f'[DEBUG v11] model_id={repr(model_id)}', flush=True)
+  print(f'[DEBUG v11] v11_last_sentence={repr(last_sentence)}', flush=True)
+  print(f'[DEBUG v11] v11_prefix={repr(prefix)}', flush=True)
 
   # Create Vertex AI client
   client = genai.Client(
@@ -336,14 +329,69 @@ def RunTunedModel(model_id, user_inputs, temperature):
   if not suggestions:
     return json.dumps({'messages': []})
 
-  # Select 3 most diverse suggestions
-  selected = _select_diverse_suggestions(suggestions, num_select=3)
+  # Select 5 most diverse suggestions (to match Gemini output format)
+  selected = _select_diverse_suggestions(suggestions, num_select=5)
 
-  # Debug: log selected suggestions
-  print(f'[DEBUG v11] selected suggestions: {selected}', flush=True)
+  # Convert slash-separated suggestions to complete sentences for web app
+  # The model returns tokens for the ENTIRE completion including the prefix already input
+  # We need to skip tokens that are already in the prefix and take remaining tokens to form complete suggestions
+  complete_suggestions = []
+  base_text = last_sentence + prefix  # Reconstruct the complete input text
+  
+  # Get the words in prefix to use as reference for skipping duplicate tokens
+  prefix_words = [w.lower() for w in prefix.split() if w.strip()]
+  
+  print(f'[DEBUG v11] base_text={repr(base_text)}', flush=True)
+  print(f'[DEBUG v11] prefix_words={prefix_words}', flush=True)
+  
+  for idx, suggestion in enumerate(selected):
+    print(f'[DEBUG v11] suggestion[{idx}]={repr(suggestion[:80])}', flush=True)
+    if '/' in suggestion:
+      # Split on '/' to get individual tokens from model output
+      tokens = [token.strip() for token in suggestion.split('/') if token.strip()]
+      print(f'[DEBUG v11] tokens={tokens[:15]}...', flush=True)
+      
+      # Find first new token (not a repeat of prefix tokens)
+      first_new_idx = 0
+      for i, token in enumerate(tokens):
+        token_lower = token.lower().rstrip('/?')  # Remove punctuation for comparison
+        is_duplicate = any(token_lower.startswith(pw) or token_lower == pw for pw in prefix_words)
+        print(f'[DEBUG v11] token[{i}]={repr(token)} lower={repr(token_lower)} is_dup={is_duplicate}', flush=True)
+        if not is_duplicate:
+          first_new_idx = i
+          print(f'[DEBUG v11] found first new at index {i}', flush=True)
+          break
+      
+      # Take remaining tokens (up to 12) starting from first new token to form a complete suggestion
+      # This captures more of the model's output to create full, meaningful suggestions
+      num_tokens_to_take = 12
+      end_idx = min(first_new_idx + num_tokens_to_take, len(tokens))
+      new_tokens = tokens[first_new_idx:end_idx]
+      print(f'[DEBUG v11] taking tokens[{first_new_idx}:{end_idx}]={new_tokens}', flush=True)
+      
+      if new_tokens:
+        # Join tokens with spaces, and remove trailing punctuation
+        phrase = ' '.join(new_tokens).rstrip('/?')
+        print(f'[DEBUG v11] phrase={repr(phrase)}', flush=True)
+        # Add space before phrase if prefix doesn't end with space
+        if prefix and not prefix.endswith(' '):
+          complete_suggestion = base_text + ' ' + phrase
+        else:
+          complete_suggestion = base_text + phrase
+        print(f'[DEBUG v11] complete_suggestion={repr(complete_suggestion)}', flush=True)
+        complete_suggestions.append(complete_suggestion)
+    else:
+      # If no slash, treat as complete suggestion
+      complete_suggestions.append(base_text + suggestion)
+  
+  # Limit to 5 suggestions total (matching Gemini format)
+  complete_suggestions = complete_suggestions[:5]
+
+  # Debug: log converted suggestions
+  print(f'[DEBUG v11] FINAL converted suggestions: {complete_suggestions}', flush=True)
 
   # Format as numbered list
-  numbered_list = '\n'.join(f'{i+1}. {s}' for i, s in enumerate(selected))
+  numbered_list = '\n'.join(f'{i+1}. {s}' for i, s in enumerate(complete_suggestions))
   return json.dumps({'messages': [{'text': numbered_list}]}, ensure_ascii=False)
 
 
@@ -363,6 +411,12 @@ def RunGeminiMacro(model_id, prompt, temperature, language):
   Returns:
     The result generated by the macro.
   """
+
+  # Debug: log input prompt preview
+  print(f'[DEBUG gemini] model_id={repr(model_id)}', flush=True)
+  print(f'[DEBUG gemini] language={repr(language)}', flush=True)
+  print(f'[DEBUG gemini] temperature={repr(temperature)}', flush=True)
+  print(f'[DEBUG gemini] prompt preview: {repr(prompt[:200])}', flush=True)
 
   client = genai.Client(api_key=os.environ.get('API_KEY'))
   thinking_config = None
@@ -384,7 +438,12 @@ def RunGeminiMacro(model_id, prompt, temperature, language):
           thinking_config=thinking_config,
       ),
   )
+  
+  # Debug: log raw response
+  print(f'[DEBUG gemini] raw_response={repr(response.text[:200] if response.text else "EMPTY")}', flush=True)
+  
   if not response.text:
+    print(f'[DEBUG gemini] No response text, returning empty messages', flush=True)
     return json.dumps({'messages': []})
   text = response.text
   # Quick hack to remove highlights from response. All '*' are removed even
@@ -394,7 +453,65 @@ def RunGeminiMacro(model_id, prompt, temperature, language):
     # Also remove hankaku spaces in Japanese texts.
     text = re.sub(r'([^\w;:,.?]) +(\W)', r'\1\2', text, flags=re.ASCII)
   text = text.replace('§', ' ')
-  return json.dumps({'messages': [{'text': text}]}, ensure_ascii=False)
+  
+  # Debug: log final processed text
+  print(f'[DEBUG gemini] processed_text={repr(text[:200])}', flush=True)
+  
+  final_output = json.dumps({'messages': [{'text': text}]}, ensure_ascii=False)
+  print(f'[DEBUG gemini] final_output={repr(final_output[:200])}', flush=True)
+  
+  return final_output
+
+
+def _convert_to_v11_format(user_inputs):
+  """Converts standard macro format to v11 tuned model format.
+
+  The v11 tuned model expects specific parameters:
+  - v11_history: context before the current sentence
+  - v11_last_sentence: the sentence being typed (without trailing prefix)
+  - v11_prefix: the trailing keyboard-inputtable characters (hiragana, alphabet)
+
+  This function extracts these from the standard 'text' parameter.
+
+  Args:
+    user_inputs: Dictionary of user inputs with 'text' key.
+
+  Returns:
+    Modified user_inputs dictionary with v11-specific parameters.
+  """
+  # If v11 parameters are already provided, use them as-is
+  if user_inputs.get('v11_last_sentence') or user_inputs.get('v11_prefix'):
+    return user_inputs
+
+  # Convert standard format to v11 format
+  text = user_inputs.get('text', '')
+  if not text:
+    return user_inputs
+
+  # Split into history and last sentence
+  # For now, treat the entire text as last_sentence (iOS splits it more carefully)
+  v11_history = ''
+  last_sentence = text
+
+  # Extract the trailing keyboard-inputtable prefix from the last sentence
+  # Pattern matches: hiragana (あ-ん), prolonged sound (ー), alphabet (A-Za-z), numbers (0-9), space
+  import re
+  # Find trailing keyboard-inputtable characters
+  match = re.search(r'([A-Za-z0-9 あ-んー]*)$', last_sentence, re.UNICODE)
+  if match:
+    v11_prefix = match.group(1)
+    v11_last_sentence = last_sentence[:match.start()]
+  else:
+    # If no keyboard-inputtable suffix, treat entire text as last_sentence
+    v11_prefix = ''
+    v11_last_sentence = last_sentence
+
+  # Update user_inputs with v11-specific parameters
+  user_inputs['v11_history'] = v11_history
+  user_inputs['v11_last_sentence'] = v11_last_sentence
+  user_inputs['v11_prefix'] = v11_prefix
+
+  return user_inputs
 
 
 def RunMacro(macro_id, user_inputs, temperature, model_id):
@@ -416,7 +533,16 @@ def RunMacro(macro_id, user_inputs, temperature, model_id):
 
   # Check if this is a tuned model
   if model_id in TUNED_MODELS:
-    return RunTunedModel(model_id, user_inputs, temperature)
+    if 'Word' in macro_id:
+      # If tuned model is selected but it's a word suggestion request,
+      # fall back to a standard Gemini model because tuned models only
+      # support sentence/phrase level predictions.
+      model_id = 'gemini-2.5-flash'
+    else:
+      # For sentence/phrase suggestions, use the tuned model and ensure
+      # inputs are converted to the format expected by the tuned model.
+      user_inputs = _convert_to_v11_format(user_inputs)
+      return RunTunedModel(model_id, user_inputs, temperature)
 
   # Handle space character for Japanese language
   language = user_inputs.get('language', '')
