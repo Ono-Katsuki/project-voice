@@ -200,12 +200,16 @@ export class PvSettingPanel extends SignalWatcher(LitElement) {
           >
             <div slot="headline">Gemini 2.5 Flash</div>
           </md-select-option>
-          <md-select-option
-            ?selected="${this.state.aiConfig === 'voice_v11'}"
-            value="voice_v11"
-          >
-            <div slot="headline">Tuned Model (v11)</div>
-          </md-select-option>
+          ${this.state.lang.promptName === 'Japanese'
+        ? html`
+                <md-select-option
+                  ?selected="${this.state.aiConfig === 'voice_v11'}"
+                  value="voice_v11"
+                >
+                  <div slot="headline">Tuned Model (v11)</div>
+                </md-select-option>
+              `
+      : ''}
         </md-outlined-select>
       </div>
       <div class="form-section">

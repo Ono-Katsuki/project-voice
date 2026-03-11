@@ -190,6 +190,22 @@ def _similarity(a, b):
   return difflib.SequenceMatcher(None, a, b).ratio()
 
 
+def _assemble_v11_suggestion(last_sentence, prefix, output):
+  """Cleans and joins Japanese v11 completion output."""
+  if not output:
+    return last_sentence + prefix
+
+  # 1. Remove slashes and join (Japanese has no spaces)
+  clean_output = output.replace('/', '')
+
+  # 2. Avoid prefix duplication
+  if prefix and clean_output.lower().startswith(prefix.lower()):
+    return last_sentence + clean_output
+  
+  # 3. Join with prefix as bridge
+  return last_sentence + prefix + clean_output
+
+
 def _select_diverse_suggestions(suggestions, num_select=4):
   """Select most diverse suggestions using greedy selection.
 
@@ -200,21 +216,34 @@ def _select_diverse_suggestions(suggestions, num_select=4):
   Returns:
     List of selected suggestion texts.
   """
-  if len(suggestions) <= num_select:
-    return [s[1] for s in suggestions]
+  if not suggestions:
+    return []
 
-  # Greedy selection: start with the first one, then pick most different
-  selected = [suggestions[0]]
-  remaining = suggestions[1:]
+  # 1. Deduplicate by suggestion text while maintaining order (most confident tone first)
+  unique_suggestions = []
+  seen = set()
+  for item in suggestions:
+    if item[1] not in seen:
+      unique_suggestions.append(item)
+      seen.add(item[1])
+
+  # If few unique ones, return all of them
+  if len(unique_suggestions) <= num_select:
+    return [s[1] for s in unique_suggestions]
+
+  # 2. Greedy selection from unique items
+  # Start with the first one (most confident tone result usually)
+  selected = [unique_suggestions[0]]
+  remaining = unique_suggestions[1:]
 
   while len(selected) < num_select and remaining:
     best_idx = -1
     best_min_sim = 1.0
 
     for i, (_, candidate) in enumerate(remaining):
-      # Calculate minimum similarity to all selected
+      # Calculate minimum similarity to all currently selected
       min_sim = min(_similarity(candidate, sel[1]) for sel in selected)
-      # We want to maximize diversity (minimize similarity)
+      # Minimize similarity to maximize diversity
       if min_sim < best_min_sim:
         best_min_sim = min_sim
         best_idx = i
@@ -346,45 +375,11 @@ def RunTunedModel(model_id, user_inputs, temperature):
   
   for idx, suggestion in enumerate(selected):
     print(f'[DEBUG v11] suggestion[{idx}]={repr(suggestion[:80])}', flush=True)
-    if '/' in suggestion:
-      # Split on '/' to get individual tokens from model output
-      tokens = [token.strip() for token in suggestion.split('/') if token.strip()]
-      print(f'[DEBUG v11] tokens={tokens[:15]}...', flush=True)
-      
-      # Find first new token (not a repeat of prefix tokens)
-      first_new_idx = 0
-      for i, token in enumerate(tokens):
-        token_lower = token.lower().rstrip('/?')  # Remove punctuation for comparison
-        is_duplicate = any(token_lower.startswith(pw) or token_lower == pw for pw in prefix_words)
-        print(f'[DEBUG v11] token[{i}]={repr(token)} lower={repr(token_lower)} is_dup={is_duplicate}', flush=True)
-        if not is_duplicate:
-          first_new_idx = i
-          print(f'[DEBUG v11] found first new at index {i}', flush=True)
-          break
-      
-      # Take remaining tokens (up to 12) starting from first new token to form a complete suggestion
-      # This captures more of the model's output to create full, meaningful suggestions
-      num_tokens_to_take = 12
-      end_idx = min(first_new_idx + num_tokens_to_take, len(tokens))
-      new_tokens = tokens[first_new_idx:end_idx]
-      print(f'[DEBUG v11] taking tokens[{first_new_idx}:{end_idx}]={new_tokens}', flush=True)
-      
-      if new_tokens:
-        # Join tokens with spaces, and remove trailing punctuation
-        phrase = ' '.join(new_tokens).rstrip('/?')
-        print(f'[DEBUG v11] phrase={repr(phrase)}', flush=True)
-        # Add space before phrase if prefix doesn't end with space
-        if prefix and not prefix.endswith(' '):
-          complete_suggestion = base_text + ' ' + phrase
-        else:
-          complete_suggestion = base_text + phrase
-        print(f'[DEBUG v11] complete_suggestion={repr(complete_suggestion)}', flush=True)
-        complete_suggestions.append(complete_suggestion)
-    else:
-      # If no slash, treat as complete suggestion
-      complete_suggestions.append(base_text + suggestion)
+    assembled = _assemble_v11_suggestion(last_sentence, prefix, suggestion)
+    if assembled not in complete_suggestions:
+      complete_suggestions.append(assembled)
   
-  # Limit to 5 suggestions total (matching Gemini format)
+  # Limit to 5 unique suggestions total (matching Gemini format)
   complete_suggestions = complete_suggestions[:5]
 
   # Debug: log converted suggestions
@@ -456,7 +451,7 @@ def RunGeminiMacro(model_id, prompt, temperature, language):
   
   # Debug: log final processed text
   print(f'[DEBUG gemini] processed_text={repr(text[:200])}', flush=True)
-  
+
   final_output = json.dumps({'messages': [{'text': text}]}, ensure_ascii=False)
   print(f'[DEBUG gemini] final_output={repr(final_output[:200])}', flush=True)
   
@@ -464,53 +459,39 @@ def RunGeminiMacro(model_id, prompt, temperature, language):
 
 
 def _convert_to_v11_format(user_inputs):
-  """Converts standard macro format to v11 tuned model format.
-
-  The v11 tuned model expects specific parameters:
-  - v11_history: context before the current sentence
-  - v11_last_sentence: the sentence being typed (without trailing prefix)
-  - v11_prefix: the trailing keyboard-inputtable characters (hiragana, alphabet)
-
-  This function extracts these from the standard 'text' parameter.
-
-  Args:
-    user_inputs: Dictionary of user inputs with 'text' key.
-
-  Returns:
-    Modified user_inputs dictionary with v11-specific parameters.
-  """
-  # If v11 parameters are already provided, use them as-is
+  """Converts standard macro format to Japanese v11 tuned model format."""
   if user_inputs.get('v11_last_sentence') or user_inputs.get('v11_prefix'):
     return user_inputs
 
-  # Convert standard format to v11 format
-  text = user_inputs.get('text', '')
+  text = user_inputs.get('text', '').strip()
   if not text:
     return user_inputs
 
-  # Split into history and last sentence
-  # For now, treat the entire text as last_sentence (iOS splits it more carefully)
-  v11_history = ''
-  last_sentence = text
-
-  # Extract the trailing keyboard-inputtable prefix from the last sentence
-  # Pattern matches: hiragana (あ-ん), prolonged sound (ー), alphabet (A-Za-z), numbers (0-9), space
-  import re
-  # Find trailing keyboard-inputtable characters
-  match = re.search(r'([A-Za-z0-9 あ-んー]*)$', last_sentence, re.UNICODE)
-  if match:
-    v11_prefix = match.group(1)
-    v11_last_sentence = last_sentence[:match.start()]
+  # Split into history and current text at the last sentence boundary
+  # Japanese delimiters: 。？！ or newline
+  parts = re.split(r'([。？！\n\r]+)', text)
+  if len(parts) > 1:
+      current_text = parts[-1]
+      v11_history = "".join(parts[:-1])
   else:
-    # If no keyboard-inputtable suffix, treat entire text as last_sentence
+      current_text = text
+      v11_history = ""
+
+  # Find trailing Japanese keyboard input (hiragana, alphabet, space, ー)
+  match = re.search(r'([a-zA-Z \u3000あ-んー]*)$', current_text, re.UNICODE)
+  
+  if match and match.group(1):
+    v11_prefix = match.group(1)
+    v11_last_sentence = current_text[:match.start()]
+  else:
     v11_prefix = ''
-    v11_last_sentence = last_sentence
+    v11_last_sentence = current_text
 
-  # Update user_inputs with v11-specific parameters
-  user_inputs['v11_history'] = v11_history
-  user_inputs['v11_last_sentence'] = v11_last_sentence
-  user_inputs['v11_prefix'] = v11_prefix
-
+  user_inputs.update({
+    'v11_history': v11_history,
+    'v11_last_sentence': v11_last_sentence,
+    'v11_prefix': v11_prefix
+  })
   return user_inputs
 
 
