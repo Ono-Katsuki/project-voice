@@ -13,9 +13,11 @@
 # limitations under the License.
 
 runtime: python312
+service: tuned-model
 env_variables:
-  API_KEY: "YOUR_GEMINI_API_KEY_HERE"
+  API_KEY: "Gemini_API_for_tuned_model_service_by_zezhang"
   SECRET_KEY: "YOUR_SECRET_KEY_HERE"
+  GOOGLE_APPLICATION_CREDENTIALS: "project-voice-476504-c2364420bcb1.json"
 
 handlers:
 - url: /static
