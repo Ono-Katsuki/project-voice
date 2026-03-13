@@ -640,11 +640,12 @@ export class PvAppElement extends SignalWatcher(LitElement) {
         return;
       }
       const [sentenceValues, words] = result;
+      const isV11 = this.stateInternal.model.startsWith('voice-');
       const sentences = sentenceValues.map(
         s =>
           new SentenceSuggestion(
             SentenceSuggestionSource.LLM,
-            firstHalf + ignoreUnnecessaryDiffs(secondHalf, s),
+            isV11 ? s : firstHalf + ignoreUnnecessaryDiffs(secondHalf, s),
           ),
       );
       this.updateSentences(sentences);

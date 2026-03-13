@@ -191,19 +191,20 @@ def _similarity(a, b):
 
 
 def _assemble_v11_suggestion(last_sentence, prefix, output):
-  """Cleans and joins Japanese v11 completion output."""
+  """Cleans and joins Japanese v11 completion output.
+
+  The v11 model returns the full completion after [---], which already includes
+  the converted form of the prefix (e.g., prefix "きょう" becomes "今日" in
+  the model output). So we should NOT prepend the prefix again — just use
+  last_sentence + clean_output, matching the iOS implementation.
+  """
   if not output:
     return last_sentence + prefix
 
-  # 1. Remove slashes and join (Japanese has no spaces)
+  # Remove slashes and join (Japanese has no spaces)
   clean_output = output.replace('/', '')
 
-  # 2. Avoid prefix duplication
-  if prefix and clean_output.lower().startswith(prefix.lower()):
-    return last_sentence + clean_output
-  
-  # 3. Join with prefix as bridge
-  return last_sentence + prefix + clean_output
+  return last_sentence + clean_output
 
 
 def _select_diverse_suggestions(suggestions, num_select=4):
